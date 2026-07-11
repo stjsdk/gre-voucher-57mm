@@ -2,10 +2,9 @@
 
 Herramienta web que convierte **Guías de Remisión Electrónica (GRE)** emitidas por SUNAT (Perú) en un comprobante PDF listo para imprimir en impresoras térmicas portátiles de 57mm — pensado para choferes que necesitan un voucher físico legible en ruta.
 
-**[▶ Ver demo en vivo](https://stjsdk.github.io/gre-voucher-57mm/)**
+**[▶ Ver demo](https://stjsdk.github.io/gre-voucher-57mm/)**
 
 ![screenshot](docs/screenshot.png)
-*(agregar una captura de pantalla real en `docs/screenshot.png`)*
 
 ## El problema
 
@@ -44,7 +43,7 @@ Todo corre **100% en el navegador** — los datos de la guía nunca salen del di
 2. Sube el XML de la GRE (obligatorio) y el PDF oficial (opcional, para el QR).
 3. Haz clic en **Generar y descargar PDF 57mm**.
 
-## Cómo correrlo localmente
+## Córrelo localmente
 
 ```bash
 git clone https://github.com/TU_USUARIO/gre-voucher-57mm.git
@@ -52,10 +51,6 @@ cd gre-voucher-57mm
 # Simplemente abre index.html en tu navegador, o sirve la carpeta:
 python3 -m http.server 8000
 ```
-
-## Motivación
-
-Este proyecto nació de una necesidad real en una empresa de transporte de carga: equipar a los choferes con un flujo simple para imprimir comprobantes desde el camión, sin depender de conexión a internet en tiempo real ni de software especializado costoso.
 
 ## Licencia
 
