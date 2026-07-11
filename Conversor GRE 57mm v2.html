@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conversor GRE → Voucher 57mm</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f3;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:2rem 1rem}
+.wrap{background:#fff;border-radius:16px;border:1px solid #e0ddd6;padding:2rem;width:100%;max-width:520px}
+h1{font-size:18px;font-weight:600;color:#1a1a18;margin-bottom:4px}
+.sub{font-size:13px;color:#888;margin-bottom:1.5rem}
+.hint{font-size:12px;color:#888;margin-bottom:14px;line-height:1.5}
+.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem}
+.dz{border:1.5px dashed #ccc;border-radius:12px;padding:1.25rem .75rem;text-align:center;cursor:pointer;transition:all .15s;background:#fafaf8;position:relative}
+.dz:hover,.dz.over{background:#f0f4ff;border-color:#4a7aff}
+.dz.done{border-color:#4caf50;border-style:solid;background:#f1f9f1}
+.dz input{display:none}
+.dz .ico{font-size:28px;margin-bottom:6px}
+.dz .lbl{font-size:13px;color:#444;font-weight:500}
+.dz .sub2{font-size:11px;color:#888;margin-top:2px}
+.dz .tick{position:absolute;top:8px;right:10px;color:#4caf50;font-size:16px;display:none}
+.dz.done .tick{display:block}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:11px;border-radius:8px;border:none;cursor:pointer;font-size:14px;font-weight:500;transition:all .15s}
+.bp{background:#1a1a18;color:#fff}.bp:hover{background:#333}.bp:disabled{background:#999;cursor:not-allowed}
+.bs{background:#f0f0ee;color:#444;border:1px solid #ddd}.bs:hover{background:#e8e8e6}
+.btns{display:flex;gap:8px;margin-top:4px}.btns .bp{flex:1}
+.card{background:#fafaf8;border:1px solid #e8e8e5;border-radius:10px;padding:1rem 1.2rem;margin-bottom:1rem}
+.row-info{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:6px;font-weight:500}
+.b-ok{background:#e8f5e9;color:#2e7d32}
+.b-pend{background:#f0f0ee;color:#666}
+.b-warn{background:#fff8e1;color:#f57f17}
+.docid{font-size:15px;font-weight:600;color:#1a1a18}
+.status{font-size:13px;color:#555;min-height:18px;margin-top:10px}
+.err{color:#c0392b;background:#fdf0ef;border:1px solid #f5c6c6;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:1rem;display:none}
+#panel{display:none}
+#qrtmp{position:fixed;left:-9999px;top:0}
+#cvs{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📄 GRE → Voucher 57mm</h1>
+  <p class="sub">Conversor de Guías de Remisión Electrónica SUNAT</p>
+  <p class="hint">Sube los dos archivos que descargaste de SUNAT. El QR se extrae automáticamente del PDF.</p>
+
+  <div class="upload-grid">
+    <div class="dz" id="dzXml" onclick="document.getElementById('xf').click()">
+      <div class="ico">📋</div>
+      <div class="lbl">Archivo XML</div>
+      <div class="sub2">Datos de la GRE</div>
+      <div class="tick">✓</div>
+      <input type="file" id="xf" accept=".xml">
+    </div>
+    <div class="dz" id="dzPdf" onclick="document.getElementById('pf').click()">
+      <div class="ico">📄</div>
+      <div class="lbl">Archivo PDF</div>
+      <div class="sub2">Para leer el QR</div>
+      <div class="tick">✓</div>
+      <input type="file" id="pf" accept=".pdf">
+    </div>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div id="panel">
+    <div class="card">
+      <div class="row-info">
+        <span class="badge b-ok" id="bXml">✓ XML</span>
+        <span class="badge b-pend" id="bPdf">⏳ PDF pendiente</span>
+        <span class="docid" id="docid"></span>
+      </div>
+    </div>
+    <div class="btns">
+      <button class="btn bp" id="btnG" onclick="genPDF()">⬇ Generar y descargar PDF 57mm</button>
+      <button class="btn bs" onclick="resetAll()">↺ Reiniciar</button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+</div>
+
+<div id="qrtmp"></div>
+<canvas id="cvs"></canvas>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+var gData = null;
+var qrUrl = null;
+
+function setupDrop(dzId, inputId, handler) {
+  var dz = document.getElementById(dzId);
+  var inp = document.getElementById(inputId);
+  dz.addEventListener('dragover', function(e) { e.preventDefault(); dz.classList.add('over'); });
+  dz.addEventListener('dragleave', function() { dz.classList.remove('over'); });
+  dz.addEventListener('drop', function(e) { e.preventDefault(); dz.classList.remove('over'); if (e.dataTransfer.files[0]) handler(e.dataTransfer.files[0]); });
+  inp.addEventListener('change', function() { if (this.files[0]) handler(this.files[0]); });
+}
+setupDrop('dzXml', 'xf', loadXML);
+setupDrop('dzPdf', 'pf', loadPDF);
+
+function resetAll() {
+  gData = null; qrUrl = null;
+  document.getElementById('xf').value = '';
+  document.getElementById('pf').value = '';
+  document.getElementById('dzXml').classList.remove('done');
+  document.getElementById('dzPdf').classList.remove('done');
+  document.getElementById('panel').style.display = 'none';
+  document.getElementById('err').style.display = 'none';
+  var bp = document.getElementById('bPdf');
+  bp.className = 'badge b-pend'; bp.textContent = '⏳ PDF pendiente';
+  setStatus('');
+}
+function setErr(m) { var e = document.getElementById('err'); e.textContent = m; e.style.display = 'block'; }
+function setStatus(m) { document.getElementById('status').textContent = m; }
+
+// ── namespace-safe XML helpers ────────────────────────────────────────────
+function byTag(root, name) {
+  var r = root.getElementsByTagNameNS('*', name);
+  if (r && r.length) return Array.from(r);
+  var all = root.getElementsByTagName('*'), res = [];
+  for (var i = 0; i < all.length; i++) {
+    if (all[i].localName === name || all[i].tagName === name) res.push(all[i]);
+  }
+  return res;
+}
+function gt(root, name) { var e = byTag(root, name); return e.length ? e[0].textContent.trim() : ''; }
+function fd(d) { if (!d) return ''; var p = d.split('-'); return p.length === 3 ? p[2]+'/'+p[1]+'/'+p[0] : d; }
+function scopeEl(root, name) { var e = byTag(root, name); return e.length ? e[0] : null; }
+function allEls(root, name) { return byTag(root, name); }
+// ─────────────────────────────────────────────────────────────────────────
+
+function loadXML(file) {
+  document.getElementById('err').style.display = 'none';
+  var r = new FileReader();
+  r.onload = function(e) {
+    try {
+      var xml = new DOMParser().parseFromString(e.target.result, 'text/xml');
+      if (xml.querySelector('parsererror')) { setErr('XML inválido.'); return; }
+      parseGRE(xml);
+      document.getElementById('dzXml').classList.add('done');
+      document.getElementById('panel').style.display = 'block';
+    } catch(ex) { setErr('Error leyendo XML: ' + ex.message); }
+  };
+  r.readAsText(file, 'UTF-8');
+}
+
+function parseGRE(xml) {
+  function findId() {
+    var ids = byTag(xml, 'ID');
+    for (var i = 0; i < ids.length; i++) {
+      var t = ids[i].textContent.trim();
+      if (/^[A-Z]{2}\d{2}-\d+/.test(t)) return t;
+    }
+    return '';
+  }
+  function pid(s) { if (!s) return ''; var pi = scopeEl(s, 'PartyIdentification'); return pi ? gt(pi, 'ID') : ''; }
+  function rname(s) { return s ? gt(s, 'RegistrationName') : ''; }
+  function addrLine(s) { if (!s) return ''; var l = byTag(s, 'Line'); return l.length ? l[0].textContent.trim() : ''; }
+  function tucVal(s) { if (!s) return ''; var m = scopeEl(s, 'ApplicableTransportMeans'); return m ? gt(m, 'RegistrationNationalityID') : ''; }
+  function placaVal(s) {
+    if (!s) return '';
+    var ids = byTag(s, 'ID');
+    for (var i = 0; i < ids.length; i++) {
+      var t = ids[i].textContent.trim();
+      if (t && t !== '-' && t.length <= 10 && !/^\d{8,}$/.test(t)) return t;
+    }
+    return '';
+  }
+
+  var sp = scopeEl(xml, 'DespatchSupplierParty');
+  var cp = scopeEl(xml, 'DeliveryCustomerParty');
+  var op = scopeEl(xml, 'OriginatorCustomerParty');
+  var stage = scopeEl(xml, 'ShipmentStage');
+  var delivery = scopeEl(xml, 'Delivery');
+  var despatch = scopeEl(xml, 'Despatch');
+  var daddr = despatch ? scopeEl(despatch, 'DespatchAddress') : null;
+  var delvaddr = delivery ? scopeEl(delivery, 'DeliveryAddress') : null;
+  var te = scopeEl(xml, 'TransportEquipment');
+  var ate = scopeEl(xml, 'AttachedTransportEquipment');
+  var drv = scopeEl(xml, 'DriverPerson');
+  var carrier = stage ? scopeEl(stage, 'CarrierParty') : null;
+  var dparty = despatch ? scopeEl(despatch, 'DespatchParty') : null;
+  var transit = scopeEl(xml, 'TransitPeriod');
+  var pesoEl = byTag(xml, 'GrossWeightMeasure')[0];
+  var si = gt(xml, 'SpecialInstructions');
+
+  var drvIdVal = '';
+  if (drv) {
+    var dids = byTag(drv, 'ID');
+    for (var i = 0; i < dids.length; i++) {
+      if (dids[i].getAttribute('schemeID') === '1' || !dids[i].getAttribute('schemeID')) {
+        drvIdVal = dids[i].textContent.trim(); break;
+      }
+    }
+  }
+  var drvRef = drv ? scopeEl(drv, 'IdentityDocumentReference') : null;
+
+  // ── Documentos relacionados (AdditionalDocumentReference) ────────────────
+  var adrEls = allEls(xml, 'AdditionalDocumentReference');
+  var docsRelacionados = [];
+  for (var i = 0; i < adrEls.length; i++) {
+    var adr = adrEls[i];
+    var docId   = gt(adr, 'ID');
+    var docType = gt(adr, 'DocumentType');
+    var issuer  = scopeEl(adr, 'IssuerParty');
+    var rucEmisor = issuer ? gt(issuer, 'ID') : '';
+    if (docId) {
+      docsRelacionados.push({ id: docId, tipo: docType, ruc: rucEmisor });
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Items / bienes ────────────────────────────────────────────────────────
+  var lineEls = allEls(xml, 'DespatchLine'), items = [];
+  for (var i = 0; i < lineEls.length; i++) {
+    var qe = byTag(lineEls[i], 'DeliveredQuantity');
+    var qEl = qe.length ? qe[0] : null;
+    var desc = gt(lineEls[i], 'Description') || gt(lineEls[i], 'Name') || '';
+    var qty  = qEl ? qEl.textContent.trim() : '';
+    var unit = qEl ? (qEl.getAttribute('unitCode') || '') : '';
+    // Skip placeholder items with no real data
+    if (desc && desc.toUpperCase() !== 'SIN ITEM') {
+      items.push({ qty: qty, unit: unit, desc: desc });
+    } else if (desc.toUpperCase() === 'SIN ITEM' && qty) {
+      items.push({ qty: qty, unit: unit, desc: desc });
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  gData = {
+    id: findId(),
+    fecha: fd(gt(xml, 'IssueDate')),
+    hora: (gt(xml, 'IssueTime') || '').substring(0, 5),
+    inicio: transit ? fd(gt(transit, 'StartDate')) : '',
+    emisorRUC: pid(sp), emisorNombre: rname(sp),
+    mtc: carrier ? gt(carrier, 'CompanyID') : '',
+    remRUC: dparty ? pid(dparty) : pid(op),
+    remNombre: dparty ? rname(dparty) : rname(op),
+    destRUC: pid(cp), destNombre: rname(cp),
+    conductor: drv ? gt(drv, 'FirstName') : '',
+    dniVal: drvIdVal,
+    licencia: drvRef ? gt(drvRef, 'ID') : '',
+    placa1: placaVal(te), tuc1: tucVal(te),
+    placa2: ate ? placaVal(ate) : '', tuc2: ate ? tucVal(ate) : '',
+    origen: addrLine(daddr), destino: addrLine(delvaddr),
+    peso: pesoEl ? pesoEl.textContent.trim() + ' ' + (pesoEl.getAttribute('unitCode') || '') : '',
+    flete: si.includes('Remitente') ? 'Remitente' : si.includes('Destinatario') ? 'Destinatario' : '',
+    docsRelacionados: docsRelacionados,
+    items: items
+  };
+
+  document.getElementById('docid').textContent = gData.id || '(sin número)';
+}
+
+function loadPDF(file) {
+  setStatus('Leyendo QR del PDF...');
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    pdfjsLib.getDocument({ data: new Uint8Array(e.target.result) }).promise.then(function(pdf) {
+      pdf.getPage(1).then(function(page) {
+        var vp = page.getViewport({ scale: 3 });
+        var cvs = document.getElementById('cvs');
+        cvs.width = vp.width; cvs.height = vp.height;
+        page.render({ canvasContext: cvs.getContext('2d'), viewport: vp }).promise.then(function() {
+          var imgData = cvs.getContext('2d').getImageData(0, 0, cvs.width, cvs.height);
+          var code = jsQR(imgData.data, imgData.width, imgData.height);
+          var bp = document.getElementById('bPdf');
+          document.getElementById('dzPdf').classList.add('done');
+          if (code && code.data) {
+            qrUrl = code.data;
+            bp.className = 'badge b-ok'; bp.textContent = '✓ QR leído';
+            setStatus('QR detectado correctamente.');
+          } else {
+            bp.className = 'badge b-warn'; bp.textContent = '⚠ Sin QR';
+            setStatus('No se detectó QR. El voucher se generará sin él.');
+          }
+        });
+      });
+    }).catch(function(ex) { setStatus('Error leyendo PDF: ' + ex.message); });
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── PDF generation ────────────────────────────────────────────────────────
+function genPDF() {
+  if (!gData) { setStatus('Primero carga el XML.'); return; }
+  var btn = document.getElementById('btnG');
+  btn.disabled = true; setStatus('Generando PDF...');
+
+  function buildAndSave(qrImg) {
+    try {
+      var jsPDF = window.jspdf.jsPDF;
+      var PW = 57, ML = 3, TW = 51, M = 'courier';
+
+      function renderContent(doc, draw, qrImage) {
+        var y = 4;
+
+        function sep() {
+          if (draw) { doc.setDrawColor(160,160,160); doc.setLineDashPattern([0.7,0.7],0); doc.line(ML,y,PW-ML,y); doc.setLineDashPattern([],0); }
+          y += 1.8;
+        }
+        function sf(bold, sz) { doc.setFont(M, bold ? 'bold' : 'normal'); doc.setFontSize(sz); }
+        function t(s, sz, bold, ind) {
+          if (!s) return; sz = sz||7;
+          sf(bold, sz);
+          if (draw) doc.text(String(s), ML+(ind||0), y);
+          y += sz * 0.42;
+        }
+        function tC(s, sz, bold) {
+          if (!s) return; sz = sz||7;
+          sf(bold, sz);
+          if (draw) doc.text(String(s), PW/2, y, {align:'center'});
+          y += sz * 0.42;
+        }
+        function tR(l, r, sz, boldR) {
+          sz = sz||7; sf(false, sz);
+          if (draw) { if (l) doc.text(l, ML, y); sf(boldR, sz); if (r) doc.text(r, PW-ML, y, {align:'right'}); }
+          y += sz * 0.42;
+        }
+        function tw(s, sz, ind) {
+          if (!s) return; sz = sz||7;
+          sf(false, sz);
+          var lines = doc.splitTextToSize(String(s), TW-(ind||0));
+          if (draw) { for (var i=0; i<lines.length; i++) { doc.text(lines[i], ML+(ind||0), y); y += sz*0.40; } }
+          else { y += lines.length * sz * 0.40; }
+        }
+        function sec(s) {
+          y += 1; sf(true, 6.5);
+          if (draw) doc.text(s, ML, y);
+          y += 6.5 * 0.42;
+        }
+
+        // ── Header ───────────────────────────────────────────────────────
+        tC('GUIA DE REMISION', 7.5, true);
+        tC('ELECTRONICA - SUNAT', 6.5, false);
+        y += 1; sep();
+        tC(gData.id, 8, true); y += 0.5;
+        tR('Emision:', gData.fecha + (gData.hora ? ' ' + gData.hora : ''));
+        if (gData.inicio) tR('Inicio traslado:', gData.inicio);
+        sep();
+
+        // ── Emisor ───────────────────────────────────────────────────────
+        sec('EMISOR (TRANSPORTISTA)');
+        t('RUC: ' + gData.emisorRUC);
+        tw(gData.emisorNombre);
+        if (gData.mtc) t('Reg. MTC: ' + gData.mtc, 6);
+        sep();
+
+        // ── Remitente ────────────────────────────────────────────────────
+        sec('REMITENTE');
+        t('RUC: ' + gData.remRUC);
+        tw(gData.remNombre);
+        sep();
+
+        // ── Destinatario ─────────────────────────────────────────────────
+        sec('DESTINATARIO');
+        t('RUC: ' + gData.destRUC);
+        tw(gData.destNombre);
+        sep();
+
+        // ── Docs relacionados (solo si existen) ──────────────────────────
+        if (gData.docsRelacionados && gData.docsRelacionados.length > 0) {
+          sec('DOCS RELACIONADOS');
+          for (var i = 0; i < gData.docsRelacionados.length; i++) {
+            var dr = gData.docsRelacionados[i];
+            if (dr.tipo) tw(dr.tipo, 6);
+            var lineDoc = 'N° ' + dr.id + (dr.ruc ? '  RUC: ' + dr.ruc : '');
+            tw(lineDoc, 6, 2);
+          }
+          sep();
+        }
+
+        // ── Traslado ─────────────────────────────────────────────────────
+        sec('TRASLADO');
+        if (gData.flete) tR('Pagador flete:', gData.flete);
+        if (gData.peso)  tR('Peso bruto:', gData.peso, 7, true);
+        y += 0.8;
+        if (gData.origen)  { t('Origen:', 6);  tw(gData.origen, 6, 2);  y += 0.5; }
+        if (gData.destino) { t('Destino:', 6); tw(gData.destino, 6, 2); }
+        sep();
+
+        // ── Vehículos ────────────────────────────────────────────────────
+        sec('VEHICULOS');
+        if (gData.placa1) tR('Placa principal:', gData.placa1, 7, true);
+        if (gData.tuc1)   t('TUC: ' + gData.tuc1, 6);
+        if (gData.placa2) tR('Placa secund.:', gData.placa2, 7, true);
+        if (gData.tuc2)   t('TUC: ' + gData.tuc2, 6);
+        sep();
+
+        // ── Conductor ────────────────────────────────────────────────────
+        sec('CONDUCTOR');
+        tw(gData.conductor);
+        if (gData.dniVal)   tR('DNI:', gData.dniVal);
+        if (gData.licencia) tR('Licencia:', gData.licencia);
+        sep();
+
+        // ── Bienes ───────────────────────────────────────────────────────
+        if (gData.items && gData.items.length > 0) {
+          sec('BIENES');
+          for (var i = 0; i < gData.items.length; i++) {
+            var it = gData.items[i];
+            var qtyLine = (it.qty + ' ' + (it.unit || '')).trim();
+            if (qtyLine) t(qtyLine, 7, true);
+            tw(it.desc, 7, 2);
+          }
+          sep();
+        }
+
+        // ── QR ───────────────────────────────────────────────────────────
+        if (qrImage) {
+          y += 1; tC('VALIDAR EN SUNAT', 6.5, true);
+          if (draw) doc.addImage(qrImage, 'PNG', ML, y, TW, TW);
+          y += TW + 1;
+          tC('sunat.gob.pe', 6); y += 1; sep();
+        } else {
+          y += 1; tC('Validar en: sunat.gob.pe', 6); y += 2;
+        }
+
+        // ── Firma ────────────────────────────────────────────────────────
+        y += 2;
+        if (draw) {
+          doc.setDrawColor(0); doc.setLineWidth(0.3);
+          doc.rect(ML, y, TW, 12);
+          sf(false, 6);
+          doc.text('Firma y sello receptor', PW/2, y+6.5, {align:'center'});
+        }
+        y += 14;
+        return y + 4;
+      }
+
+      // Pass 1: measure
+      var dummy = new jsPDF({ unit: 'mm', format: [PW, 800], orientation: 'portrait' });
+      var totalH = renderContent(dummy, false, qrImg);
+
+      // Pass 2: draw
+      var doc = new jsPDF({ unit: 'mm', format: [PW, totalH], orientation: 'portrait' });
+      renderContent(doc, true, qrImg);
+
+      doc.save('GRE_' + (gData.id || 'voucher') + '_57mm.pdf');
+      setStatus('✓ PDF descargado correctamente.');
+      btn.textContent = '✓ Descargado';
+      setTimeout(function() { btn.textContent = '⬇ Generar y descargar PDF 57mm'; btn.disabled = false; }, 3000);
+
+    } catch(ex) {
+      setStatus('Error: ' + ex.message);
+      console.error(ex);
+      btn.disabled = false;
+    }
+  }
+
+  if (qrUrl) {
+    var qd = document.getElementById('qrtmp'); qd.innerHTML = '';
+    try {
+      new QRCode(qd, { text: qrUrl, width: 256, height: 256, correctLevel: QRCode.CorrectLevel.M });
+      setTimeout(function() {
+        var el = qd.querySelector('canvas') || qd.querySelector('img');
+        buildAndSave(el ? (el.tagName === 'CANVAS' ? el.toDataURL('image/png') : el.src) : null);
+      }, 600);
+    } catch(ex) { buildAndSave(null); }
+  } else {
+    buildAndSave(null);
+  }
+}
+</script>
+</body>
+</html>
